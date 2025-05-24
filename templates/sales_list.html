@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="get" class="mb-3">
+    <input type="text" name="q" class="form-control" placeholder="Search sales by product name..." value="{{ request.args.get('q', '') }}">
+</form>
+
+<a href="{{ url_for('record_sale') }}" class="btn btn-primary mb-3">Sell New Item</a>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Product</th>
+            <th>Quantity</th>
+            <th>Unit Price</th>
+            <th>Total Price</th>
+            <th>Customer</th>
+            <th>Payment Type</th>
+            <th>Comments</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for sale in sales %}
+        <tr>
+            <td>{{ sale.product_name }}</td>
+            <td>{{ sale.quantity }}</td>
+            <td>${{ "%.2f"|format(sale.unit_price) }}</td>
+            <td>${{ "%.2f"|format(sale.total_price) }}</td>
+            <td>{{ sale.customer_name or '-' }}</td>
+            <td>{{ sale.payment_type or '-' }}</td>
+            <td>{{ sale.comments or '-' }}</td>
+            <td>{{ sale.timestamp }}</td>
+            <td>
+                <a href="{{ url_for('view_receipt', sale_id=sale.id) }}" class="btn btn-sm btn-primary">
+                    View Receipt
+                </a>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">No sales found.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

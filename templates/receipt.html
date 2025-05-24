@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Receipt</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 400px; margin: auto; padding: 20px; }
+        h2 { text-align: center; }
+        .receipt-box { border: 1px solid #ccc; padding: 15px; }
+        .line { margin: 5px 0; }
+        .footer { text-align: center; margin-top: 20px; font-size: 12px; color: gray; }
+        .btn-print { margin-top: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+    <h2>Sales Receipt</h2>
+    <div class="receipt-box">
+        <div class="line"><strong>Date:</strong> {{ sale.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+        <div class="line"><strong>Customer:</strong> {{ sale.customer_name or 'N/A' }}</div>
+        <div class="line"><strong>Product:</strong> {{ product.name }}</div>
+        <div class="line"><strong>Unit Price:</strong> ₦{{ "%.2f"|format(sale.unit_price) }}</div>
+        <div class="line"><strong>Quantity:</strong> {{ sale.quantity }}</div>
+        <div class="line"><strong>Total:</strong> ₦{{ "%.2f"|format(sale.unit_price * sale.quantity) }}</div>
+        <div class="line"><strong>Payment Type:</strong> {{ sale.payment_type }}</div>
+        <div class="line"><strong>Comments:</strong> {{ sale.comments or 'None' }}</div>
+        <!--<div class="line"><strong>Total:</strong> ₦{{ sale.total_price }}</div>-->
+        
+    </div>
+    <div class="btn-print">
+        <button onclick="window.print()">Print Receipt</button>
+    </div>
+    <div class="footer">Thank you for your purchase!</div>
+</body>
+</html>
