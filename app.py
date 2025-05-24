@@ -1,10 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, abort, jsonify
 from models import db, Product, Sale, Expense, User
-from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from flask_login import LoginManager, current_user, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import pandas as pd
 from datetime import datetime, timedelta
 import io
+from functools import wraps
+from sqlalchemy import func
 
 app = Flask(__name__)
 app.secret_key = 'dev-secret-key-1234'  # Change this!
@@ -24,6 +26,76 @@ def load_user(user_id):
 #@app.before_first_request
 def create_tables():
     db.create_all()
+    
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin():
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
+
+def approver_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not (current_user.is_admin() or current_user.is_approver()):
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/admin/pending_users')
+@login_required
+@approver_required
+def pending_users():
+    users = User.query.filter_by(is_approved=False).all()
+    return render_template('pending_users.html', users=users)
+
+@app.route('/admin/approve_user/<int:user_id>', methods=['POST'])
+@login_required
+@approver_required
+def approve_user(user_id):
+    user = User.query.get_or_404(user_id)
+    user.is_approved = True
+    db.session.commit()
+    flash(f"User {user.username} approved.", "success")
+    return redirect(url_for('pending_users'))
+
+@app.route('/admin/reject_user/<int:user_id>', methods=['POST'])
+@login_required
+@approver_required
+def reject_user(user_id):
+    user = User.query.get_or_404(user_id)
+    db.session.delete(user)
+    db.session.commit()
+    flash(f"User {user.username} rejected and deleted.", "info")
+    return redirect(url_for('pending_users'))
+
+@app.route('/admin/users')
+@login_required
+@admin_required
+def manage_users():
+    users = User.query.all()
+    return render_template('admin_manage_users.html', users=users)
+
+@app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if request.method == 'POST':
+        # Extract role and approval status from form
+        new_role = request.form.get('role')
+        is_approved = True if request.form.get('is_approved') == 'on' else False
+
+        user.role = new_role
+        user.is_approved = is_approved
+        db.session.commit()
+        flash(f"Updated user {user.username} successfully.", "success")
+        return redirect(url_for('manage_users'))
+    
+    return render_template('admin_edit_user.html', user=user)
+
+
 
 @app.route('/')
 def home():
@@ -34,25 +106,65 @@ def home():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
+        username = request.form.get('username')
+        full_name = request.form.get('full_name')
+        email = request.form.get('email')
+        phone_number = request.form.get('phone_number')
+        password = request.form.get('password')
+
+        # Basic validation
+        if not username or not full_name or not email or not password:
+            return "Please fill all required fields", 400
+
         if User.query.filter_by(username=username).first():
             return "Username already exists", 400
-        password = generate_password_hash(request.form['password'])
-        user = User(username=username, password=password)
+
+        if User.query.filter_by(email=email).first():
+            return "Email already exists", 400
+
+        if phone_number and User.query.filter_by(phone_number=phone_number).first():
+            return "Phone number already exists", 400
+
+        hashed_password = generate_password_hash(password)
+
+        user = User(
+            username=username,
+            full_name=full_name,
+            email=email,
+            phone_number=phone_number,
+            password=hashed_password,
+            role='user',          # default role
+            is_approved=False     # default not approved
+        )
+
         db.session.add(user)
         db.session.commit()
+
         return redirect(url_for('login'))
+
     return render_template('register.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        user = User.query.filter_by(username=request.form['username']).first()
-        if user and check_password_hash(user.password, request.form['password']):
+        username = request.form['username']
+        password = request.form['password']
+
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            if not user.is_approved:
+                flash('Your account is pending admin approval.', 'warning')
+                return redirect(url_for('login'))
+
             login_user(user)
+            flash('Logged in successfully.', 'success')
             return redirect(url_for('dashboard'))
-        return "Invalid credentials", 401
+
+        flash('Invalid username or password.', 'danger')
+
     return render_template('login.html')
+
 
 @app.route('/logout')
 @login_required
@@ -66,7 +178,7 @@ def dashboard():
     total_sales = db.session.query(db.func.sum(Sale.total_price)).scalar() or 0
     total_expenses = db.session.query(db.func.sum(Expense.amount)).scalar() or 0
     total_stock = db.session.query(db.func.sum(Product.quantity)).scalar() or 0
-    total_cogs = db.session.query(db.func.sum(Sale.cost_price * Sale.quantity)).scalar() or 0
+    total_cogs = db.session.query(func.sum(Sale.cost_price * Sale.quantity)).scalar() or 0
     
     profit = total_sales - total_cogs - total_expenses
 
@@ -167,6 +279,8 @@ def record_sale():
         customer_name = request.form.get('customer_name', '').strip()
         payment_type = request.form.get('payment_type', 'Cash')
         comments = request.form.get('comments', '').strip()
+        # Access the current user
+        user_id = current_user.id
 
         product = Product.query.get_or_404(product_id)
         if product.quantity >= quantity:
@@ -179,15 +293,51 @@ def record_sale():
                 total_price=total_price,
                 customer_name=customer_name or None,
                 payment_type=payment_type,
-                comments=comments or None
+                comments=comments or None,
+                user_id=user_id   # ✅ Automatically associate the logged-in user
             )
             product.quantity -= quantity
             db.session.add(sale)
             db.session.commit()
+            
+            flash("Sale recorded successfully!", "success")
+            print(f"Sale recorded by user: {sale.user.username}")
+            
             return redirect(url_for('view_receipt', sale_id=sale.id))
         else:
             return "Insufficient stock", 400
+        
     return render_template('record_sale.html', products=products)
+
+@app.route('/test_user')
+@login_required
+def test_user():
+    # current logged-in user info
+    current_user_info = {
+        "id": current_user.id,
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "email": current_user.email,
+    }
+
+    # get all sales with user info
+    sales = Sale.query.all()
+    sales_data = []
+    for sale in sales:
+        sales_data.append({
+            "sale_id": sale.id,
+            "product": sale.product.name,
+            "quantity": sale.quantity,
+            "total_price": sale.total_price,
+            "sold_by_username": sale.user.username if sale.user else None,
+            "sold_by_full_name": sale.user.full_name if sale.user else None,
+        })
+
+    return jsonify({
+        "current_user": current_user_info,
+        "sales": sales_data,
+    })
+
 
 
 @app.route('/receipt/<int:sale_id>')
@@ -209,6 +359,7 @@ def sales_list():
 
     sales_query = sales_query.order_by(Sale.timestamp.desc())
     sales = sales_query.all()
+    user_id = current_user.id
 
     sales_data = []
     for s in sales:
@@ -222,7 +373,8 @@ def sales_list():
             'customer_name': s.customer_name,
             'payment_type': s.payment_type,
             'comments': s.comments,
-            'timestamp': s.timestamp.strftime("%Y-%m-%d %H:%M") if s.timestamp else ''
+            'timestamp': s.timestamp.strftime("%Y-%m-%d %H:%M") if s.timestamp else '',
+            'username': s.user.username if s.user else '-'
         })
 
     return render_template('sales_list.html', sales=sales_data)
@@ -278,17 +430,18 @@ def export_sales():
 
     sales = sales_query.all()
     data = []
-    for s in sales:
-        product = Product.query.get(s.product_id)
+    for sale in sales:
+        product = Product.query.get(sale.product_id)
         data.append({
-            'id': s.id,
-            'Product': product.name if product else "Unknown Product",
-            'Quantity': s.quantity,
-            'Cost Price': s.cost_price,
-            'Unit Price': s.unit_price,
-            'Total': s.total_price,
-            'Custumer': s.customer_name,
-            'Date': s.timestamp.strftime("%Y-%m-%d") if s.timestamp else ''
+            'Product': product.name if product else 'Unknown',
+            'Quantity': sale.quantity,
+            'Unit Price': sale.unit_price,
+            'Total Price': sale.total_price,
+            'Customer Name': sale.customer_name,
+            'Payment Type': sale.payment_type,
+            'Comments': sale.comments,
+            'Sold By': sale.user.username if sale.user else 'N/A',
+            'Timestamp': sale.timestamp.strftime('%Y-%m-%d %H:%M:%S')
         })
 
     df = pd.DataFrame(data)
@@ -334,6 +487,8 @@ def export_reports():
             'quantity': s.quantity,
             'unit_price': s.unit_price,
             'total_price': s.total_price,
+            'Comments': s.comments,
+            'username': s.user.username if s.user else '',
             'timestamp': s.timestamp.strftime("%Y-%m-%d") if s.timestamp else ''
         })
 
@@ -361,4 +516,15 @@ def restock_product():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        if not User.query.filter_by(username='admin', role='admin').first():
+            admin = User(
+                full_name='Developer', 
+                email='netocodez@gmail.com', 
+                username='admin', 
+                password=generate_password_hash('yourpassword'), 
+                role='admin', 
+                is_approved=True
+            )
+            db.session.add(admin)
+            db.session.commit()
     app.run(debug=True)

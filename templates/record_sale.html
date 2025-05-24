@@ -2,6 +2,12 @@
 {% block content %}
 <div class="container mt-4">
   <h3 class="mb-4">Record New Sale</h3>
+
+  {% if products|length == 0 %}
+    <div class="alert alert-warning">No products available. Please add products before recording sales.</div>
+  {% endif %}
+
+
   <form method="POST" class="card p-4 shadow-sm">
     
     <div class="mb-3">

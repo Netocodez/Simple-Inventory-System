@@ -19,13 +19,13 @@
                 <ul class="navbar-nav">
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('sales_list') }}">Sales</a></li>
-                    <!--<li class="nav-item"><a class="nav-link" href="{{ url_for('record_sale') }}">Sell Item</a></li>-->
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Products</a></li>
-                    <!--<li class="nav-item"><a class="nav-link" href="{{ url_for('add_product') }}">Add Product</a></li>-->
-                    <!--<li class="nav-item"><a class="nav-link" href="{{ url_for('restock_product') }}">restock_product</a></li>-->
-                    <!--<li class="nav-item"><a class="nav-link" href="{{ url_for('record_expense') }}"> Add Expenses</a></li>-->
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('expenses') }}">Expenses</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('export_reports') }}"> Export Reports</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('pending_users') }}">Pending Users</a></li>
+                    {% if current_user.is_authenticated and current_user.is_admin() %}
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('manage_users') }}">Manage Users</a></li>
+                    {% endif %}
                 </ul>
                 <ul class="navbar-nav ms-auto">
                 <li class="nav-item">

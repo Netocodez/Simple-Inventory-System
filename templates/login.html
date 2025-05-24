@@ -335,6 +335,18 @@
 											<!--<a href="#" class="btn mt-4">submit</a>-->
                             				<!--<p class="mb-0 mt-4 text-center"><a href="#0" class="link">Forgot your password?</a></p>-->
 				      					</div>
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                          {% if messages %}
+                            <div class="mb-3">
+                              {% for category, message in messages %}
+                                <div class="alert alert-{{ 'warning' if category == 'warning' else 'danger' if category == 'danger' else 'success' }} alert-dismissible fade show" role="alert">
+                                  {{ message }}
+                                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                              {% endfor %}
+                            </div>
+                          {% endif %}
+                        {% endwith %}
 			      					</div>
                       </form>
 			      				</div>
@@ -344,18 +356,31 @@
 											<h4 class="mb-4 pb-3">Sign Up</h4>
                       
                       <form method="POST" action="/register">
-											<div class="form-group">
-												<input type="text" name="username" class="form-style" placeholder="Your Full Name" id="logname" autocomplete="off">
-												<i class="input-icon uil uil-user"></i>
-											</div>	
-											<!--<div class="form-group mt-2">
-												<input type="email" name="logemail" class="form-style" placeholder="Your Email" id="logemail" autocomplete="off">
-												<i class="input-icon uil uil-at"></i>
-											</div>-->	
-											<div class="form-group mt-2">
-												<input type="password" name="password" class="form-style" placeholder="Your Password" id="logpass" autocomplete="off">
-												<i class="input-icon uil uil-lock-alt"></i>
-											</div>
+                      <div class="form-group">
+                        <input type="text" name="username" class="form-style" placeholder="Your Username" id="logname" autocomplete="off" required>
+                        <i class="input-icon uil uil-user"></i>
+                      </div>	
+
+                      <div class="form-group">
+                        <input type="text" name="full_name" class="form-style" placeholder="Your Full Name" id="full_name" autocomplete="off" required>
+                        <i class="input-icon uil uil-user"></i>
+                      </div>
+
+                      <div class="form-group mt-2">
+                        <input type="email" name="email" class="form-style" placeholder="Your Email" id="email" autocomplete="off" required>
+                        <i class="input-icon uil uil-at"></i>
+                      </div>
+
+                      <div class="form-group mt-2">
+                        <input type="text" name="phone_number" class="form-style" placeholder="Your Phone Number" id="phone_number" autocomplete="off">
+                        <i class="input-icon uil uil-phone"></i>
+                      </div>
+
+                      <div class="form-group mt-2">
+                        <input type="password" name="password" class="form-style" placeholder="Your Password" id="logpass" autocomplete="off" required>
+                        <i class="input-icon uil uil-lock-alt"></i>
+                      </div>
+
                       <button type="submit" class="btn mt-4">Register</button>
 											<!--<a href="#" class="btn mt-4">submit</a>-->
 				      					</div>
